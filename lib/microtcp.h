@@ -48,9 +48,16 @@ typedef enum
   CLOSING_BY_PEER,
   CLOSING_BY_HOST,
   CLOSED,
-  INVALID
+  INVALID,
+  UNKNOWN
 } mircotcp_state_t;
 
+typedef enum{
+    ACK = 4096,
+    SYN = 16384,
+    SYN_ACK = 20480,
+    FIN_ACK = 36864,
+}microtcp_control;
 
 /**
  * This is the microTCP socket structure. It holds all the necessary
@@ -58,6 +65,7 @@ typedef enum
  *
  * NOTE: Fill free to insert additional fields.
  */
+
 typedef struct
 {
   int sd;                       /**< The underline UDP socket descriptor */
@@ -82,6 +90,10 @@ typedef struct
   uint64_t bytes_send;
   uint64_t bytes_received;
   uint64_t bytes_lost;
+
+  int CLIENT_INIT_SEQ;
+  int SERVER_INIT_SEQ;
+  const struct sockaddr *servaddr, *clientaddr;
 } microtcp_sock_t;
 
 
@@ -123,19 +135,15 @@ microtcp_connect (microtcp_sock_t *socket, const struct sockaddr *address,
  * @return ATTENTION despite the original accept() this function returns
  * 0 on success or -1 on failure
  */
-int
-microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
+int microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
                  socklen_t address_len);
 
-int
-microtcp_shutdown(microtcp_sock_t *socket, int how);
+int microtcp_shutdown(microtcp_sock_t *socket, int how);
 
-ssize_t
-microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
+ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
                int flags);
 
-ssize_t
-microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags);
+ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags);
 
 
 #endif /* LIB_MICROTCP_H_ */

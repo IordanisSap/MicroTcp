@@ -23,8 +23,35 @@
  * This file is already inserted at the build system.
  */
 
-int
-main(int argc, char **argv)
-{
+#include "../lib/microtcp.h"
+#include <arpa/inet.h>
+#include "string.h"
+#include "stdio.h"
 
+#define PORT 8080
+
+int main(int argc, char **argv) {
+    microtcp_sock_t sock;
+    struct sockaddr_in servaddr;
+    int flag;
+    sock = microtcp_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock.state == INVALID) {
+        printf("Error initialising socket\n");
+        return -1;
+    }
+    memset(&servaddr, 0, sizeof(servaddr));
+
+    // Filling server information
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(PORT);
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+
+    flag = microtcp_connect(&sock,(const struct sockaddr *) &servaddr,sizeof(servaddr));
+    if (flag == -1){
+        printf("Error connecting to server\n");
+    }
+    printf("Connected to server\n");
+    microtcp_shutdown(&sock,5);
+    if (sock.state == CLOSED) printf("Shutdown successful\n");
+    return 0;
 }

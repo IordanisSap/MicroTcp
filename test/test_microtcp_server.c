@@ -23,8 +23,42 @@
  * This file is already inserted at the build system.
  */
 
-int
-main(int argc, char **argv)
-{
+#include "../lib/microtcp.h"
+#include <arpa/inet.h>
+#include "string.h"
+#include "stdlib.h"
+#include "stdio.h"
+#define PORT 8080
+
+
+int main(int argc, char **argv){
+    microtcp_sock_t sock;
+    struct sockaddr_in servaddr,cliaddr;
+    int flag;
+    sock = microtcp_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock.state == INVALID) {
+        printf("Error initialising socket\n");
+        return -1;
+    }
+    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&cliaddr, 0, sizeof(cliaddr));
+
+    servaddr.sin_family    = AF_INET; // IPv4
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(PORT);
+
+    flag = microtcp_bind(&sock, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+    if (flag == -1){
+        printf("Binding error\n");
+    }
+    microtcp_accept(&sock, ( struct sockaddr *) &cliaddr, sizeof(cliaddr));
+    if (sock.state == INVALID){
+        printf("Error accepting client\n");
+        return -1;
+    }
+    printf("Successfully accepted client\n");
+    sock.recvbuf = malloc(sizeof(uint8_t) * MICROTCP_RECVBUF_LEN);
+
+    microtcp_recv(&sock,sock.recvbuf,sizeof(uint8_t) * MICROTCP_RECVBUF_LEN,0);
 
 }

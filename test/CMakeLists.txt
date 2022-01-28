@@ -32,4 +32,4 @@ target_link_libraries(test_microtcp_client microtcp)
 target_link_libraries(traffic_generator microtcp)
 target_link_libraries(traffic_generator_client microtcp)
 
-install(TARGETS bandwidth_test DESTINATION bin)
+install(TARGETS bandwidth_test test_microtcp_client test_microtcp_server DESTINATION bin)
