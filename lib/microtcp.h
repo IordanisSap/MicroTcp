@@ -91,9 +91,9 @@ typedef struct
   uint64_t bytes_received;
   uint64_t bytes_lost;
 
-  int CLIENT_INIT_SEQ;
-  int SERVER_INIT_SEQ;
-  const struct sockaddr *servaddr, *clientaddr;
+  uint64_t CLIENT_INIT_SEQ;
+  uint64_t SERVER_INIT_SEQ;
+  const struct sockaddr *addr;
 } microtcp_sock_t;
 
 

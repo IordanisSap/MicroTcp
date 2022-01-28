@@ -90,7 +90,7 @@ int microtcp_connect (microtcp_sock_t *socket, const struct sockaddr *address,
         return -1;
     }
 
-    socket->servaddr = address;
+    socket->addr = address;
 
 
 
@@ -114,6 +114,8 @@ int microtcp_connect (microtcp_sock_t *socket, const struct sockaddr *address,
         sockError(socket,"Timeout");
         return -1;
     }
+    socket->SERVER_INIT_SEQ = header->seq_number;
+
     set_SeqAck();
     header->control = ACK;
     encodeHeader(header);
@@ -139,7 +141,7 @@ int microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
         return -1;
     }
 
-    socket->clientaddr = address;
+    socket->addr = address;
 
     while (header->control != SYN) {
         recvfrom(socket->sd, (microtcp_header_t *) header, sizeof(microtcp_header_t), 0, address, &address_len);
@@ -147,6 +149,7 @@ int microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
     }
 
 
+    socket->CLIENT_INIT_SEQ = header->seq_number;
     set_SeqAck();
     header->ack_number = header->ack_number + 1;
     header->seq_number = socket->SERVER_INIT_SEQ;
@@ -191,14 +194,14 @@ int microtcp_shutdown (microtcp_sock_t *socket, int how) {
         header->control = FIN_ACK;
         while (header->control != ACK && flag<20) {
             encodeHeader(header);
-            sent = sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->servaddr, sizeof(struct sockaddr));
+            sent = sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->addr, sizeof(struct sockaddr));
             if (sent == -1) {
                 sockError(socket,"Send error");
                 return -1;
             }
             fflush(stdout);
             recved = recvfrom(socket->sd, (microtcp_header_t *) header, sizeof(microtcp_header_t), 0,
-                              (struct sockaddr *) socket->servaddr, &size);
+                              (struct sockaddr *) socket->addr, &size);
 
             if (recved > 0) decodeHeader(header);
             flag++;
@@ -213,7 +216,7 @@ int microtcp_shutdown (microtcp_sock_t *socket, int how) {
         flag = 0;
         while (header->control != FIN_ACK && flag<MAX_TRIES) {
             recved = recvfrom(socket->sd, (microtcp_header_t *) header, sizeof(microtcp_header_t), 0,
-                              (struct sockaddr *) socket->servaddr, &size);
+                              (struct sockaddr *) socket->addr, &size);
             if (recved > 0) decodeHeader(header);
             fflush(stdout);
             flag++;
@@ -226,7 +229,7 @@ int microtcp_shutdown (microtcp_sock_t *socket, int how) {
 
         header->control = ACK;
         encodeHeader(header);
-        sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->servaddr, sizeof(struct sockaddr));
+        sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->addr, sizeof(struct sockaddr));
         if (sent == -1) {
             sockError(socket,"Send error");
             return -1;
@@ -237,7 +240,7 @@ int microtcp_shutdown (microtcp_sock_t *socket, int how) {
     else if (socket->state==CLOSING_BY_PEER){
         while (header->control != FIN_ACK && flag<MAX_TRIES) {
             recved = recvfrom(socket->sd, (microtcp_header_t *) header, sizeof(microtcp_header_t), 0,
-                     (struct sockaddr *) socket->clientaddr, &size);
+                     (struct sockaddr *) socket->addr, &size);
             if (recved>0) decodeHeader(header);
             flag++;
         }
@@ -251,7 +254,7 @@ int microtcp_shutdown (microtcp_sock_t *socket, int how) {
         header->control = ACK;
         header->ack_number = header->seq_number+1;
         encodeHeader(header);
-        sent = sendto(socket->sd, header, sizeof(microtcp_header_t),0,socket->clientaddr, sizeof(struct sockaddr));
+        sent = sendto(socket->sd, header, sizeof(microtcp_header_t),0,socket->addr, sizeof(struct sockaddr));
         if (sent == -1) {
             sockError(socket,"Send error");
             return -1;
@@ -259,14 +262,14 @@ int microtcp_shutdown (microtcp_sock_t *socket, int how) {
         socket->state=CLOSING_BY_HOST;
         header->control = FIN_ACK;
         encodeHeader(header);
-        sent = sendto(socket->sd, header, sizeof(microtcp_header_t),0,socket->clientaddr, sizeof(struct sockaddr));
+        sent = sendto(socket->sd, header, sizeof(microtcp_header_t),0,socket->addr, sizeof(struct sockaddr));
         if (sent == -1) {
             sockError(socket,"Send error");
             return -1;
         }
         while (header->control != ACK) {
             recved = recvfrom(socket->sd, (microtcp_header_t *) header, sizeof(microtcp_header_t), 0,
-                     (struct sockaddr *) socket->clientaddr, &size);
+                     (struct sockaddr *) socket->addr, &size);
             if (recved>0) decodeHeader(header);
         }
 
