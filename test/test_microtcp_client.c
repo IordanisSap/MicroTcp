@@ -28,12 +28,14 @@
 #include "string.h"
 #include "stdio.h"
 
+#define randomNum 35000
 #define PORT 8080
 
 int main(int argc, char **argv) {
     microtcp_sock_t sock;
     struct sockaddr_in servaddr;
     int flag;
+    int buf[randomNum* sizeof(int)];
     sock = microtcp_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock.state == INVALID) {
         printf("Error initialising socket\n");
@@ -51,6 +53,14 @@ int main(int argc, char **argv) {
         printf("Error connecting to server\n");
     }
     printf("Connected to server\n");
+    for (int i = 0; i < randomNum; ++i) {
+        buf[i] = i;
+    }
+    int *p = (int *) buf;
+    for (int i = 0; i < randomNum; ++i) {
+        printf("%d", *(p+i));
+    }
+    microtcp_send(&sock,buf,randomNum* sizeof(int),0);
     microtcp_shutdown(&sock,5);
     if (sock.state == CLOSED) printf("Shutdown successful\n");
     return 0;

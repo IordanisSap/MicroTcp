@@ -93,7 +93,8 @@ typedef struct
 
   uint64_t CLIENT_INIT_SEQ;
   uint64_t SERVER_INIT_SEQ;
-  const struct sockaddr *addr;
+  struct sockaddr *addr;
+  socklen_t address_len
 } microtcp_sock_t;
 
 

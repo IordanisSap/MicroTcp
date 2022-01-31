@@ -28,6 +28,8 @@
 #include "string.h"
 #include "stdlib.h"
 #include "stdio.h"
+
+#define randomNum 35000
 #define PORT 8080
 
 
@@ -35,6 +37,7 @@ int main(int argc, char **argv){
     microtcp_sock_t sock;
     struct sockaddr_in servaddr,cliaddr;
     int flag;
+
     sock = microtcp_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock.state == INVALID) {
         printf("Error initialising socket\n");
@@ -57,8 +60,13 @@ int main(int argc, char **argv){
         return -1;
     }
     printf("Successfully accepted client\n");
-    sock.recvbuf = malloc(sizeof(uint8_t) * MICROTCP_RECVBUF_LEN);
+    sock.recvbuf = malloc(sizeof(int) * randomNum);
 
     microtcp_recv(&sock,sock.recvbuf,sizeof(uint8_t) * MICROTCP_RECVBUF_LEN,0);
+    printf("Received from client\n");
+    int *p = (int *) sock.recvbuf;
+    for (int i = 0; i < randomNum; ++i) {
+        printf("%d", *(p+i));
+    }
 
 }
