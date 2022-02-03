@@ -310,10 +310,12 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
     size_t remaining = length;
     size_t min, chunks;
     int payloadSize;
-    ssize_t sent;
+    ssize_t sent,recved;
     void* buf = malloc(MICROTCP_MSS);
     size_t totalSent=0;
-
+    size_t tempACK,tempACKcounter;
+    uint32_t tempSeq;
+    uint32_t initSeq = socket->seq_number;
 
 
     while (remaining>0){
@@ -337,7 +339,9 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
             memcpy(buf,header, sizeof(microtcp_header_t));
 
 
-            sent = sendto(socket->sd, buf, MICROTCP_MSS, 0, socket->addr, socket->address_len);
+            if (i!=2) {
+                sent = sendto(socket->sd, buf, MICROTCP_MSS, 0, socket->addr, socket->address_len);
+            } else chunks--;
             decodeHeader(header);
             if (!isSendSuccessful(sent, MICROTCP_MSS)) return sockError(socket, "Error sending chunk");
             header->seq_number += payloadSize;
@@ -348,19 +352,13 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
         if (remainingBytes){
             header->data_len = remainingBytes;
 
-
-
             memcpy(buf,header, sizeof(microtcp_header_t));
-
             memcpy(buf+sizeof(microtcp_header_t),buffer+totalSent,remainingBytes);
-
 
             header->checksum = crcCheck(buf,sizeof(microtcp_header_t)+remainingBytes);
 
             encodeHeader(header);
             memcpy(buf,header, sizeof(microtcp_header_t));
-
-
 
             sent = sendto(socket->sd, buf, sizeof(microtcp_header_t)+remainingBytes, 0, socket->addr, socket->address_len);
             if (!isSendSuccessful(sent, sizeof(microtcp_header_t)+remainingBytes)) return sockError(socket, "Error sending remaining Bytes");
@@ -370,13 +368,45 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
             totalSent+=remainingBytes;
 
         }
+
         remaining -= min;
         socket->seq_number = header->seq_number;
+        printf("\nremaining1 %zu\n",remaining);
 
-        /*
-         * GET ACKS
-         */
+        /*GET ACKS*/
+        printf("Waiting acks\n");
+        printf("CHunks %zu\n", chunks);
+        for (size_t i = 0; i < chunks; ++i) {
+            recved = recvfrom(socket->sd, header, sizeof(microtcp_header_t), 0,
+                              (struct sockaddr *) socket->addr, &socket->address_len);
+
+            if (recved>0){
+                decodeHeader(header);
+                printf("%d\n",header->ack_number);
+                if (header->ack_number == tempACK){
+                    tempACKcounter++;
+                    if (tempACKcounter >= 3){
+                        printf("\nChunk lost, retransmitting\n");
+                        socket->seq_number = header->ack_number;
+                        totalSent = socket->seq_number - initSeq;
+                        remaining = length-totalSent;
+                        tempACKcounter=0;
+                        break;
+                    }
+                } else{
+                    totalSent = header->ack_number - initSeq;
+                    remaining = length-totalSent;
+                    tempACK = header->ack_number;
+                    tempACKcounter=0;
+                }
+            } else {
+                return sockError(socket,"Timeout waiting for ACKs\n");
+            }
+        }
+        printf("remaining2 %zu\n",remaining);
+
     }
+
     free(buf);
     return 0;
 }
@@ -386,10 +416,13 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
 
     void *tempBuf = malloc(MICROTCP_MSS);
     uint32_t currAck = socket->ack_number;
-    unsigned int index1 = 0, index2=0;
+    unsigned int index1 = 0;
     ssize_t recved=0;
+    ssize_t sent;
+    size_t total = 0;
+
     buffer = initBuf(buffer,length);
-    while (1) {
+    while (total<length) {
         recved = recvfrom(socket->sd, tempBuf, MICROTCP_MSS, flags, socket->addr, &socket->address_len);
 
         if (recved>0){
@@ -410,17 +443,31 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
                 memcpy(buffer+index1, tempBuf + sizeof(microtcp_header_t),header->data_len);
                 index1 += header->data_len;
                 currAck += header->data_len;
+                total+=header->data_len;
                 socket->ack_number = currAck;
                 header->ack_number = currAck;
 
-            }
+            } else header->ack_number = socket->ack_number;
             /* Send Ack */
+            printf("Sending ack %d\n",header->ack_number);
+            header->seq_number = socket->seq_number;
+            header->control = ACK;
+            header->window = MICROTCP_RECVBUF_LEN - index1;
+            header->data_len = 0;
+            header->checksum = crcCheck(NULL,0);
+            /* Send Ack */
+            encodeHeader(header);
+            sent = sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->addr, socket->address_len);
+            if (!isSendSuccessful(sent, sizeof(microtcp_header_t))) return sockError(socket, "Error sending ACK");
 
         } else{
-            /* Recv timeout, need Retransmit */
+            /* Recv timeout */
+            perror("Timeouttt");
+            break;
         }
     }
     free(tempBuf);
+    printf("\n%zu %zu\n",length,total);
     return recved;
 }
 

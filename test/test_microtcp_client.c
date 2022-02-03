@@ -28,7 +28,7 @@
 #include "string.h"
 #include "stdio.h"
 
-#define randomNum 35000
+#define randomNum 3000
 #define PORT 8080
 
 int main(int argc, char **argv) {
