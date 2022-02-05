@@ -37,7 +37,7 @@ int main(int argc, char **argv){
     microtcp_sock_t sock;
     struct sockaddr_in servaddr,cliaddr;
     int flag;
-
+    uint8_t* recvbuf = malloc(sizeof(int) * randomNum);
     sock = microtcp_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock.state == INVALID) {
         printf("Error initialising socket\n");
@@ -60,14 +60,13 @@ int main(int argc, char **argv){
         return -1;
     }
     printf("Successfully accepted client\n");
-    sock.recvbuf = malloc(sizeof(int) * randomNum);
+    recvbuf = malloc(sizeof(int) * randomNum);
 
-    microtcp_recv(&sock,sock.recvbuf,randomNum* sizeof(int),0);
+    microtcp_recv(&sock,recvbuf,randomNum* sizeof(int),0);
     printf("Received from client\n");
-    int *p = (int *) sock.recvbuf;
+    int *p = (int *) recvbuf;
     for (int i = 0; i < randomNum; ++i) {
         printf("%d", *(p+i));
     }
-    microtcp_recv(&sock,sock.recvbuf,randomNum* sizeof(int),0);
-
+    microtcp_recv(&sock,recvbuf,randomNum* sizeof(int),0);
 }
