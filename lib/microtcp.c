@@ -342,8 +342,8 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
         socket->seq_number = header->seq_number;
 
         /*GET ACKS*/
-
-        for (size_t i = 0; i < chunks; ++i) {
+        size_t i;
+        for (i = 0; i < chunks; ++i) {
             recved = recvfrom(socket->sd, header, sizeof(microtcp_header_t), 0,
                               socket->addr, &socket->address_len);
 
@@ -354,6 +354,7 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
                     socket->curr_win_size = 0;
                     waitZeroWindow(socket);
                 }
+                socket->packets_received++;
                 socket->curr_win_size = header->window;
                 if (header->ack_number == tempACK){
                     tempACKcounter++;
@@ -366,6 +367,7 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
                         /* Congestion avoidance */
                         if (socket->ssthresh>1) socket->ssthresh = socket->cwnd /2;
                         socket->cwnd = socket->cwnd /2 + 1;
+                        i -= 2;
                         break;
                     }
                 } else{ /* Possibly right order */
@@ -386,8 +388,11 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
                 tempACKcounter=0;
                 if (socket->ssthresh>1) socket->ssthresh = socket->cwnd /2;
                 socket->cwnd = minAmount( MICROTCP_MSS , socket->ssthresh, INT32_MAX ); /* Obviously choose between first 2 */
+                break;
             }
         }
+        socket->packets_lost = chunks-i;
+        socket->packets_send = i;
 
     }
 
@@ -410,6 +415,7 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
         recved = recvfrom(socket->sd, tempBuf, MICROTCP_MSS, flags, socket->addr, &socket->address_len);
 
         if (recved>0){
+            socket->packets_received++;
             bufDecodeHeader(tempBuf);
             if(header->checksum != crcCheck(tempBuf, sizeof(microtcp_header_t)+header->data_len)) {
                 perror("Checksum error");
