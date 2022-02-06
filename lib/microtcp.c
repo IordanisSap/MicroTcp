@@ -58,7 +58,7 @@ microtcp_sock_t microtcp_socket (int domain, int type, int protocol) {
     sock.init_win_size = MICROTCP_WIN_SIZE;
     sock.curr_win_size = MICROTCP_WIN_SIZE;
     sock.state = UNKNOWN;
-    sock.recvbuf = malloc(MICROTCP_RECVBUF_LEN);
+    sock.recvbuf = malloc(MICROTCP_MSS);
 
     /* Set socket timeout */
     tv.tv_sec = 2;
@@ -282,7 +282,6 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
     size_t min, chunks;
     int payloadSize;
     ssize_t sent,recved;
-    void* buf = malloc(MICROTCP_MSS);
     size_t totalSent=0;
     size_t tempACK,tempACKcounter;
     uint32_t lastACK;
@@ -303,15 +302,15 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
         header->data_len = payloadSize;
         for (size_t i = 0; i < chunks; ++i) {
 
-            memcpy(buf,header, sizeof(microtcp_header_t));
-            memcpy(buf+sizeof(microtcp_header_t),buffer+(totalSent),payloadSize);
+            memcpy(socket->recvbuf,header, sizeof(microtcp_header_t));
+            memcpy(socket->recvbuf+sizeof(microtcp_header_t),buffer+(totalSent),payloadSize);
 
-            header->checksum = crcCheck(buf,MICROTCP_MSS);
+            header->checksum = crcCheck(socket->recvbuf,MICROTCP_MSS);
             encodeHeader(header);
-            memcpy(buf,header, sizeof(microtcp_header_t));
+            memcpy(socket->recvbuf,header, sizeof(microtcp_header_t));
 
 
-            sent = sendto(socket->sd, buf, MICROTCP_MSS, 0, socket->addr, socket->address_len);
+            sent = sendto(socket->sd, socket->recvbuf, MICROTCP_MSS, 0, socket->addr, socket->address_len);
             decodeHeader(header);
             if (!isSendSuccessful(sent, MICROTCP_MSS)) return sockError(socket, "Error sending chunk");
             header->seq_number += payloadSize;
@@ -322,15 +321,15 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
         if (remainingBytes){
             header->data_len = remainingBytes;
 
-            memcpy(buf,header, sizeof(microtcp_header_t));
-            memcpy(buf+sizeof(microtcp_header_t),buffer+totalSent,remainingBytes);
+            memcpy(socket->recvbuf,header, sizeof(microtcp_header_t));
+            memcpy(socket->recvbuf+sizeof(microtcp_header_t),buffer+totalSent,remainingBytes);
 
-            header->checksum = crcCheck(buf,sizeof(microtcp_header_t)+remainingBytes);
+            header->checksum = crcCheck(socket->recvbuf,sizeof(microtcp_header_t)+remainingBytes);
 
             encodeHeader(header);
-            memcpy(buf,header, sizeof(microtcp_header_t));
+            memcpy(socket->recvbuf,header, sizeof(microtcp_header_t));
 
-            sent = sendto(socket->sd, buf, sizeof(microtcp_header_t)+remainingBytes, 0, socket->addr, socket->address_len);
+            sent = sendto(socket->sd, socket->recvbuf, sizeof(microtcp_header_t)+remainingBytes, 0, socket->addr, socket->address_len);
             if (!isSendSuccessful(sent, sizeof(microtcp_header_t)+remainingBytes)) return sockError(socket, "Error sending remaining Bytes");
             chunks++;
             decodeHeader(header);
@@ -392,7 +391,6 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
 
     }
 
-    free(buf);
     return totalSent;
 }
 
@@ -497,6 +495,7 @@ void encodeHeader(microtcp_header_t* microtcpHeader){
 
 int sockError(microtcp_sock_t* sock, char* str){
     perror(str);
+    free(sock->recvbuf);
     sock->state = INVALID;
     return -1;
 }
