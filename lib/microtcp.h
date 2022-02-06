@@ -57,6 +57,7 @@ typedef enum{
     SYN = 16384,
     SYN_ACK = 20480,
     FIN_ACK = 36864,
+    FIN = 32767
 }microtcp_control;
 
 /**
