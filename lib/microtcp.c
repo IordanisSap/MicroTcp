@@ -389,9 +389,11 @@ ssize_t microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t lengt
                 decodeHeader(header);
                 lastACK = header->ack_number;
                 if (header->window==0) {
+                    socket->curr_win_size = 0;
                     waitZeroWindow(socket);
                 }
                 printf("%d\n",header->ack_number);
+                socket->curr_win_size = header->window;
                 if (header->ack_number == tempACK){
                     tempACKcounter++;
                     if (tempACKcounter >= 3){   /* 3 dup ACKs */
@@ -443,7 +445,7 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
     ssize_t recved=0;
     ssize_t sent;
     size_t total = 0;
-
+    printf("\ninitack%zu\n",socket->ack_number);
     buffer = initBuf(buffer,length);
     socket->recvbuf = initBuf(socket->recvbuf,MICROTCP_RECVBUF_LEN);
     while (total<length) {
@@ -452,7 +454,7 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
         if (recved>0){
             bufDecodeHeader(tempBuf);
             if(header->checksum != crcCheck(tempBuf, sizeof(microtcp_header_t)+header->data_len)) {
-                perror("Checksum error");
+                perror("Checksum errorrr");
                 /* Need Retransmit */
             }
             /* Check for FIN ACK*/
@@ -473,8 +475,6 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
                 header->ack_number = currAck;
                 socket->ack_number = currAck;
 
-
-
             } else header->ack_number = socket->ack_number;
             /* Send Ack */
             printf("Sending ack %d\n",header->ack_number);
@@ -484,19 +484,31 @@ ssize_t microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int
             header->data_len = 0;
             header->checksum = crcCheck(NULL,0);
             /* Send Ack */
+            if (header->ack_number>12100){
+                printf("here");
+            }
+            printf("Sending ack %d\n",header->ack_number);
             encodeHeader(header);
             sent = sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->addr, socket->address_len);
             if (!isSendSuccessful(sent, sizeof(microtcp_header_t))) return sockError(socket, "Error sending ACK");
-
 
         } else{
             /* Recv timeout */
             perror("Recv Timeout");
         }
-        if (indexRecvBuf > MICROTCP_RECVBUF_LEN-MICROTCP_MSS){
+        printf("indexrecvbuf %d\n",indexRecvBuf);
+        if (indexRecvBuf == MICROTCP_RECVBUF_LEN){
             memcpy(buffer + indexTotal, socket->recvbuf, indexRecvBuf);
             indexTotal += indexRecvBuf;
             indexRecvBuf = 0;
+            header->window=MICROTCP_RECVBUF_LEN;
+            header->ack_number = socket->ack_number;
+            header->seq_number = socket->seq_number;
+            header->data_len=0;
+            header->checksum = crcCheck(NULL,0);
+            encodeHeader(header);
+            sent = sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->addr, socket->address_len);
+            if (!isSendSuccessful(sent, sizeof(microtcp_header_t))) return sockError(socket, "Error sending packet after 0 window");
         }
     }
     free(tempBuf);
@@ -563,12 +575,14 @@ int isSendSuccessful(ssize_t sent, size_t amountToSend){
 
 int waitZeroWindow(microtcp_sock_t *socket) {
     int amount = rand() % MICROTCP_MSS;
-    short wakeUp = 0;
     ssize_t sent,recved;
-    while (!wakeUp) {
-        printf("Waiting zero window\n");
+    while ( socket->curr_win_size == 0) {
+        printf("Waiting zero window %zu\n",socket->curr_win_size);
         header->data_len = 0;
         header->control = 0;
+        header->seq_number = socket->seq_number;
+        header->ack_number = socket->ack_number;
+        header->window = 0;
         header->checksum = crcCheck(NULL,0);
         encodeHeader(header);
         sent = sendto(socket->sd, header, sizeof(microtcp_header_t), 0, socket->addr, socket->address_len);
@@ -578,10 +592,14 @@ int waitZeroWindow(microtcp_sock_t *socket) {
         if (recved>0) {
             decodeHeader(header);
             if(header->checksum != crcCheck(header, sizeof(microtcp_header_t))) perror("Checksum error");
-            else if (header->window>0) wakeUp=1;
+            else if (header->window>0) {
+                socket->curr_win_size = header->window;
+                socket->ack_number = header->ack_number;
+            }
         }
         else usleep(amount);
     }
+
     return 0;
 }
 
