@@ -275,6 +275,7 @@ client_tcp (const char *serverip, uint16_t server_port, const char *file)
   /* Open the file for writing the data from the network */
   fp = fopen (file, "r");
   if (!fp) {
+      printf("%s",file);
     perror ("Open file for reading");
     free (buffer);
     return -EXIT_FAILURE;
@@ -408,7 +409,7 @@ client_microtcp (const char *serverip, uint16_t server_port, const char *file)
             fclose (fp);
             return -EXIT_FAILURE;
         }
-
+        int temp;
     }
 
     printf ("Data sent. Terminating...\n");
